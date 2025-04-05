@@ -10,21 +10,22 @@ import (
 )
 
 type Resolution struct {
-	Label  string
-	Height int
+	Label     string
+	Height    int
+	Bandwidth int // in bits per second
 }
 
 func generateResolutions() []Resolution {
 	resolutions := []Resolution{
-		{"1080p", 1080},
-		{"720p", 720},
-		{"480p", 480},
-		{"360p", 360},
+		{"1080p", 1080, 2800000},
+		{"720p", 720, 1400000},
+		{"480p", 480, 800000},
+		{"360p", 360, 500000},
 	}
 	return resolutions
 }
 
-func RunTranscodingJob(inputPath string) error {
+func RunTranscodingJob(inputPath, outputPath string) error {
 	// Check if the input file exists
 	if _, err := os.Stat(inputPath); os.IsNotExist(err) {
 		return fmt.Errorf("input file does not exist: %w", err)
@@ -53,7 +54,7 @@ func RunTranscodingJob(inputPath string) error {
 
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
-		go newFunction(inputPath, taskCh, errCh, &wg)
+		go hlsWorker(inputPath, outputPath, taskCh, errCh, &wg)
 	}
 
 	for _, res := range resolutions {
@@ -73,21 +74,54 @@ func RunTranscodingJob(inputPath string) error {
 	return firstErr
 }
 
-func newFunction(inputPath string, resolutionChannel <-chan Resolution, errorChannel chan<- error, wg *sync.WaitGroup) (bool, error) {
-	defer wg.Done()
-	for res := range resolutionChannel {
-		output := fmt.Sprintf("%s_%s.mp4", inputPath[:len(inputPath)-len(filepath.Ext(inputPath))], res.Label)
-		cmd := exec.Command("ffmpeg", "-i", inputPath, "-vf", fmt.Sprintf("scale=-2:%d", res.Height), "-c:a", "copy", output)
+// func newFunction(inputPath string, resolutionChannel <-chan Resolution, errorChannel chan<- error, wg *sync.WaitGroup) (bool, error) {
+// 	defer wg.Done()
+// 	for res := range resolutionChannel {
+// 		output := fmt.Sprintf("%s_%s.mp4", inputPath[:len(inputPath)-len(filepath.Ext(inputPath))], res.Label)
+// 		cmd := exec.Command("ffmpeg", "-i", inputPath, "-vf", fmt.Sprintf("scale=-2:%d", res.Height), "-c:a", "copy", output)
 
-		fmt.Println("Starting:", res.Label)
+// 		fmt.Println("Starting:", res.Label)
+// 		outputBytes, err := cmd.CombinedOutput()
+// 		if err != nil {
+// 			fmt.Println(string(outputBytes))
+// 			errorChannel <- fmt.Errorf("error transcoding %s: %w", res.Label, err)
+// 			return true, fmt.Errorf("error transcoding %s: %w", res.Label, err)
+// 		}
+// 		fmt.Println("Finished:", res.Label)
+// 	}
+
+// 	return false, nil
+// }
+
+func hlsWorker(inputPath, outputPath string, resolutionChannel <-chan Resolution, errorChannel chan<- error, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	for res := range resolutionChannel {
+		outputPath := filepath.Join(outputPath, res.Label)
+		if err := os.MkdirAll(outputPath, 0755); err != nil {
+			errorChannel <- fmt.Errorf("error creating output directory: %w", err)
+			continue
+		}
+		segmentPattern := filepath.Join(outputPath, "segment_%03d.ts")
+		playlistPath := filepath.Join(outputPath, "index.m3u8")
+
+		cmd := exec.Command("ffmpeg",
+			"-i", inputPath,
+			"-vf", fmt.Sprintf("scale=-2:%d", res.Height),
+			"-c:a", "aac", "-b:a", "128k",
+			"-c:v", "h264", "-b:v", fmt.Sprintf("%dk", res.Bandwidth/1000),
+			"-hls_time", "4",
+			"-hls_playlist_type", "vod",
+			"-hls_segment_filename", segmentPattern,
+			"-f", "hls", playlistPath,
+		)
+		fmt.Println("Starting HLS:", res.Label)
 		outputBytes, err := cmd.CombinedOutput()
 		if err != nil {
 			fmt.Println(string(outputBytes))
-			errorChannel <- fmt.Errorf("error transcoding %s: %w", res.Label, err)
-			return true, fmt.Errorf("error transcoding %s: %w", res.Label, err)
+			errorChannel <- fmt.Errorf("HLS failed for %s: %w", res.Label, err)
+			continue
 		}
-		fmt.Println("Finished:", res.Label)
+		fmt.Println("Finished HLS:", res.Label)
 	}
-
-	return false, nil
 }
