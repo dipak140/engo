@@ -1,12 +1,14 @@
-## Engo Transcoder
+# Engo Transcoder
 Origin Server for Transcoding + HLS Packaging
 
-# Build and run
+## Build and run
+``` bash
 go build -o engo .
 ./engo videos/input.mp4
+```
 
-# Low Level Design
-
+## Low Level Design
+```
              ┌────────────────────┐
              │   Blob Storage     │  ← Input video
              └────────┬───────────┘
@@ -24,6 +26,7 @@ go build -o engo .
  └──────────────┘          └────────┬────────────┘
                                     ↓
                            [ Output Uploader / HTTP Serve ]
+```
 
 
 ## Core Components
@@ -37,8 +40,8 @@ go build -o engo .
 4. Output Uploader: Upload to blob
 
 ## Future Enhancements
-    Job Queue (Redis): Handle concurrent jobs, retries
-    Webhook: on Complete Notify client when HLS is ready
-    Presigned URLs: Secure temporary access to HLS files
-    Database: Store job metadata, status tracking
-    Health Checks: Production-grade deployment readiness
+1. Job Queue (Redis): Handle concurrent jobs, retries
+2. Webhook: on Complete Notify client when HLS is ready
+3. Presigned URLs: Secure temporary access to HLS files
+4. Database: Store job metadata, status tracking
+5. Health Checks: Production-grade deployment readiness
