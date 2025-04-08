@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dipak140/engo/internal"
+	"github.com/dipak140/engo/internal/transcoder"
 )
 
 func main() {
@@ -14,7 +14,7 @@ func main() {
 	}
 
 	input := os.Args[1]
-	err := internal.RunTranscodingJob(input, "output")
+	err := transcoder.RunTranscodingJob(input, "output", transcoder.FFmpegTranscoder{}, transcoder.HLSMasterPlaylist{})
 	if err != nil {
 		fmt.Printf("Transcoding wailed: %v\n", err)
 	}
