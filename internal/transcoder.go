@@ -1,4 +1,4 @@
-package transcoder
+package internal
 
 import (
 	"fmt"
@@ -23,6 +23,53 @@ func generateResolutions() []Resolution {
 		{"360p", 360, 500000},
 	}
 	return resolutions
+}
+
+func GenerateMasterPlaylist(outputPath string, resolutions []Resolution) error {
+	masterPath := filepath.Join(outputPath, "master.m3u8")
+	file, err := os.Create(masterPath)
+	if err != nil {
+		return fmt.Errorf("error creating master playlist: %w", err)
+	}
+	defer file.Close()
+	_, err = file.WriteString("#EXTM3U\n")
+	if err != nil {
+		return err
+	}
+	for _, res := range resolutions {
+		width := getWidthFromHeight(res.Height) // estimate common width
+		resolution := fmt.Sprintf("%dx%d", width, res.Height)
+
+		entry := fmt.Sprintf(
+			"#EXT-X-STREAM-INF:BANDWIDTH=%d,RESOLUTION=%s\n%s/index.m3u8\n",
+			res.Bandwidth,
+			resolution,
+			res.Label,
+		)
+
+		_, err := file.WriteString(entry)
+		if err != nil {
+			return err
+		}
+	}
+
+	fmt.Println("Generated master.m3u8")
+	return nil
+}
+
+func getWidthFromHeight(height int) int {
+	switch height {
+	case 360:
+		return 640
+	case 480:
+		return 854
+	case 720:
+		return 1280
+	case 1080:
+		return 1920
+	default:
+		return 1280
+	}
 }
 
 func RunTranscodingJob(inputPath, outputPath string) error {
@@ -71,27 +118,9 @@ func RunTranscodingJob(inputPath, outputPath string) error {
 			firstErr = err
 		}
 	}
+	GenerateMasterPlaylist(outputPath, generateResolutions())
 	return firstErr
 }
-
-// func newFunction(inputPath string, resolutionChannel <-chan Resolution, errorChannel chan<- error, wg *sync.WaitGroup) (bool, error) {
-// 	defer wg.Done()
-// 	for res := range resolutionChannel {
-// 		output := fmt.Sprintf("%s_%s.mp4", inputPath[:len(inputPath)-len(filepath.Ext(inputPath))], res.Label)
-// 		cmd := exec.Command("ffmpeg", "-i", inputPath, "-vf", fmt.Sprintf("scale=-2:%d", res.Height), "-c:a", "copy", output)
-
-// 		fmt.Println("Starting:", res.Label)
-// 		outputBytes, err := cmd.CombinedOutput()
-// 		if err != nil {
-// 			fmt.Println(string(outputBytes))
-// 			errorChannel <- fmt.Errorf("error transcoding %s: %w", res.Label, err)
-// 			return true, fmt.Errorf("error transcoding %s: %w", res.Label, err)
-// 		}
-// 		fmt.Println("Finished:", res.Label)
-// 	}
-
-// 	return false, nil
-// }
 
 func hlsWorker(inputPath, outputPath string, resolutionChannel <-chan Resolution, errorChannel chan<- error, wg *sync.WaitGroup) {
 	defer wg.Done()
