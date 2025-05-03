@@ -9,6 +9,7 @@
 *.dylib
 
 videos/input_*
+output/*
 
 # Test binary, built with `go test -c`
 *.test

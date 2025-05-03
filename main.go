@@ -14,7 +14,7 @@ func main() {
 	}
 
 	input := os.Args[1]
-	err := transcoder.RunTranscodingJob(input)
+	err := transcoder.RunTranscodingJob(input, "output", transcoder.FFmpegTranscoder{}, transcoder.HLSMasterPlaylist{})
 	if err != nil {
 		fmt.Printf("Transcoding wailed: %v\n", err)
 	}
